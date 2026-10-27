@@ -1,0 +1,151 @@
+# KaitUI
+
+> KaitUI is a single-file Luau UI library for Roblox executor scripts: a window with a sidebar of tabs, sub tabs, two-column collapsible groupboxes and eighteen elements (toggles, sliders, segmented pickers, textareas, live graphs, player pickers, dropdowns, statuses, tables and more), plus configs, live themes, coloured text, window-wide search, rich notifications, a watermark and keybind list overlay, and a draggable Dynamic Island minimize. This file is a guide for language models writing scripts with it. Follow it exactly; the README holds every option.
+
+Load it once, build the window, add tabs, put groupboxes on tabs (or sub tabs), and put elements in groupboxes. Every element with a `Flag` is saved by configs. Everything returns a handle with `Set` / `Get` (where it has a value), `SetVisible`, `IsVisible`, `SetDisabled`, `SetDependsOn`, `SetTooltip` and `Destroy`.
+
+## Files
+
+- [README.md](README.md): the full reference, one section per element with every option and handle member.
+- [examples/demo.luau](examples/demo.luau): a demo that uses every element. Copy patterns from it; it calls the library `Library`.
+- [src/](src): the readable library, split into modules (build order in `src/modules.txt`).
+- [dist/KaitUI.luau](dist/KaitUI.luau): the whole library built into one minified file by `node build.js`. This is what scripts `loadstring`.
+
+## Loading
+
+```lua
+local KaitUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/wahyuadamhusaeni/kaitui/refs/heads/main/dist/KaitUI.luau"))()
+```
+
+Optional, before `CreateWindow`: `KaitUI:LoadFont({ Name = "ValleySans" })`, `KaitUI:SetDefaultTheme("Nebula")`, `KaitUI:PreloadIcons()`.
+
+## Skeleton to start from
+
+```lua
+local Window = KaitUI:CreateWindow({
+    Name = "My Hub",                       -- title, also names the ScreenGui
+    LoadingSubtitle = "by Me",
+    ToggleUIKeybind = "RightControl",      -- hides and shows the window
+    ConfigurationSaving = { Enabled = true, FolderName = "MyHub" },
+    Home = { Discord = "dsc.gg/myhub" },   -- built-in first tab; false removes it
+    PerformanceMode = "Auto",              -- lighter on slow phones
+    OnClose = function()                   -- the × (or Window:Destroy) unloads; stop your loops here
+        getgenv().MyHubRunning = false
+    end,
+})
+
+local Main = Window:CreateTab({ Name = "Main", Icon = "swords" })     -- Icon: any lucide name
+local Farm = Main:CreateGroupbox({ Name = "Farming", Side = "Left" })  -- or Main:AddLeftGroupbox("Farming", "sprout")
+local Info = Main:CreateGroupbox({ Name = "Info", Side = "Right" })
+
+local AutoFarm = Farm:CreateToggle({
+    Name = "Auto Farm",
+    Flag = "AutoFarm",                     -- unique; makes it saveable and reachable as KaitUI.Flags.AutoFarm
+    CurrentValue = false,
+    Callback = function(On)
+        -- runs on every change, and once at creation when CurrentValue is true
+    end,
+})
+
+Farm:CreateSlider({ Name = "Range", Range = { 5, 50 }, Increment = 1, CurrentValue = 20, Suffix = " studs", Flag = "Range", Callback = function(V) end })
+Farm:CreateDropdown({ Name = "Mobs", Options = { "Bandit", "Wolf" }, MultipleOptions = true, Flag = "Mobs", Callback = function(List) end })
+
+Info:CreateStatus({ Name = "State", Style = "Row", Pin = true, Update = function()
+    return AutoFarm.Value and "<Success>Farming</Success>" or "<Muted>Idle</Muted>"
+end })
+
+local Settings = Window:CreateTab({ Name = "Settings", Icon = "settings" })
+Settings:CreateConfigManager({ Side = "Left" })
+Settings:CreateThemeManager({ Side = "Right" })
+
+Window:LoadAutoload()                      -- apply the player's autoload config, if any
+```
+
+## Rules that prevent most mistakes
+
+- Constructors exist with and without the `Create` prefix: `Tab:CreateToggle` and `Tab:Toggle` are the same. Pick one style per script.
+- Options are a single table. Legacy names are accepted (`Title` for `Name`, `Description` for `Desc`, `CurrentValue` / `Default` / `Value` for the start value, `MultipleOptions` / `Multi`), but prefer the names in this file.
+- Once a tab has sub tabs (`Tab:CreateSubTab({ Name = "Page" })`), add groupboxes and elements to the sub tabs, not the tab.
+- Elements added straight to a tab are full-width cards; elements in a groupbox are compact rows. Groupboxes are the normal choice.
+- `Flag` strings must be unique across the whole script. Toggles, sliders, steppers, segmented pickers, dropdowns, player pickers, order lists, inputs, textareas, keybinds and colour pickers take flags. Labels, buttons, statuses, graphs and tables do not (editable tables do).
+- Flagged toggles that are on count as "running" on the minimized island. Don't flag a toggle that is only a setting if that would mislead; a setting is still fine to flag.
+- `Set(value, true)` skips the callback. Use it when syncing UI from code.
+- `Update` functions may yield (`InvokeServer`, `task.wait`); they run on their own thread. Element callbacks run inline and errors are caught and warned, so keep them quick and wrap long loops in `task.spawn`. Library calls made from a thread that yielded in an engine call are made safe automatically.
+- `Update` functions on labels and statuses run every `UpdateRate` seconds (default 1), and pause while the window is hidden or minimized (pinned statuses keep running for the island). Status lists and graphs only refresh while visible. Don't rely on `Update` for game logic; run that in your own loop.
+- For low-end devices pass `PerformanceMode = "Auto"` (or `true`) to `CreateWindow`, or call `KaitUI:SetPerformanceMode(true)`: it drops weather particles, ripples and page/theme fades. Read `KaitUI.PerformanceMode` to skip your own effects. Players can also switch it in the theme manager.
+- `Window:LoadAutoload()` may run before every element exists: values for flags not created yet are held and applied when the element appears.
+- Never build your own config, theme or minimize UI. Use `CreateConfigManager`, `CreateThemeManager` and the built-in island.
+- Icons: a lucide name (`"zap"`, `"lucide:zap"`), an asset id number or `"rbxassetid://…"`, or `{ Image, RectOffset, RectSize, Tint }`.
+- `KaitUI.Touch` is true on touch-only devices. Layout already adapts; only read it for game logic.
+
+## Elements
+
+Every element takes `Name`, `Desc` (a muted hint under the name), `Tooltip` (a string or `{ Title, Text, Icon }`) `Visible`, `Disabled`, and `DependsOn` (`"Flag"`, `{ Flag, Value, Not }`, a list of rules, or a function) with `DependsMode = "Hide"` (default) or `"Disable"`. Prefer `DependsOn` over toggling visibility in callbacks.
+
+| Constructor | Key options | Handle |
+| --- | --- | --- |
+| `Button` | `Icon`, `Style = "Primary"`, `Confirm` (true or text: click twice), `ConfirmTimeout`, `HoldToConfirm` (true or seconds), `Callback()` | `SetText(text)`, `Disarm()` |
+| `ButtonRow` | list of `{ Name, Callback, Style }` (`"Primary"` / `"Danger"`) | `SetText(i, text)`, `.Buttons` |
+| `Toggle` | `CurrentValue`, `Flag`, `Callback(bool)` | `.Value`, `Set`, `Get` |
+| `Slider` | `Range = { min, max }`, `Increment`, `Suffix`, `CurrentValue`, `Flag`, `Callback(n)`, `OnRelease(n)` | `.Value`, `.Dragging`, `Set`, `Get` |
+| `Stepper` | `Range`, `Increment`, `Suffix`, `CurrentValue`, `Flag`, `Callback(n)` | `.Value`, `Set`, `Get` |
+| `Segmented` | `Options` (2 to 5 strings), `CurrentOption` (text or index), `Stacked`, `Flag`, `Callback(option)` | `.Value`, `Set(textOrIndex)`, `Get`, `SetOptions(list, skipCallback?)`, `GetOptions` |
+| `Dropdown` | `Options`, `CurrentOption`, `MultipleOptions`, `AllowNone`, `Searchable`, `MaxRows`, `NoneText`, `Stacked`, `OptionIcon(option)` (image before each row), `Flag`, `Callback(value or list)` | `Set`, `Get`, `SetOptions(options, { KeepSelection = true, Silent = false })`, `GetOptions`, `Refresh(options, keepSelection?, skipCallback?)`, `SetOpen`, `.Open` |
+| `PlayerPicker` | `Multi`, `IncludeSelf`, `Display` (`"Both"`, `"DisplayName"`, `"Name"`), `Avatars` (default true), `Flag` (saves names), `Callback(Player or list of Players)` | `Get` (Players still in game), `GetName` / `GetNames`, `Set(playerOrName or list)`, `Refresh`, `GetOptions` |
+| `OrderList` | `Items`, `MaxRows`, `Numbered`, `Arrows`, `Flag`, `Callback(order)` | `.Value`, `Set(order)`, `Refresh(items)`, `Get` |
+| `Input` | `PlaceholderText`, `CurrentValue`, `Numeric`, `Icon`, `Flag`, `Callback(text, enterPressed)` | `Set`, `Get` |
+| `Textarea` | `PlaceholderText`, `CurrentValue`, `Lines` (default 4), `MaxLength`, `Monospace`, `Flag`, `Callback(text)` on focus lost, `OnChanged(text)` while typing | `.Value`, `Set`, `Get`, `SetPlaceholder`, `Focus` |
+| `Keybind` | `CurrentKeybind` (`"F"` or `Enum.KeyCode.F`; unknown names leave it unbound), `Linked` (a toggle handle the key flips), `Flag`, `Callback(key)`, `OnChanged(key)` | `.Value`, `.Listening`, `.Linked`, `Set`, `Get` |
+| `ColorPicker` | `Color`, `Flag`, `Callback(Color3)` | `.Value`, `Set`, `Get`, `SetOpen` |
+| `Label` | `Text` (or a bare string), `Color`, `Update`, `UpdateRate` | `Set`, `Get`, `SetColor` |
+| `Paragraph` | `Title`, `Content` | `Set(text)` |
+| `Section` | a string | `Set(text)` |
+| `Divider` | `Text` (optional caption) | — |
+| `Status` | `Value`, `Style` (`Plain`, `Row`, `Badge`, `Dot`, `Bar`, `Stat`), `Tone`, `Color`, `Max`, `Prefix`, `Suffix`, `Pin`, `Update`, `UpdateRate` | `Set(value, max?)`, `Get`, `SetTone`, `SetColor`, `SetName` |
+| `Statuses` | `(entries, shared)`: names or option tables | table of status handles by name |
+| `StatusList` | `Rows`, `MaxRows`, `EmptyText`, `Update` returning rows | `Set(rows)`, `Get`, `Clear`, `SetName` |
+| `Progress` | `CurrentValue` 0..1, `Color`, `TextColor`, `Format(fraction)` | `Set`, `Get`, `SetColor`, `SetTextColor` |
+| `Table` | `Columns` (names or `{ Name, Key, Width, Align, Format, Color, Sortable }`), `Rows`, `Rank`, `SortBy`, `MaxRows`, `Search` (built-in search box, default on), `Highlight(row)`, `Callback(row, i)`. Editable: give columns a `Type` (`Text`, `Number`, `Toggle`, `Dropdown` with `Options`, `Searchable`, `SearchAfter`, `MaxRows`), plus `OnChanged(rows)`, `NewRow`, `AllowAdd`, `AllowRemove`, `Flag` | `SetRows`, `AddRow`, `UpdateRow`, `RemoveRow`, `Clear`, `Sort`, `SetColumns`, `SetSearch(text)`, `Get` |
+| `Graph` | `Update` returning a number, `UpdateRate`, `Points` (default 40), `Height`, `Min` / `Max` (auto when unset), `Suffix`, `Decimals`, `Color`, `Fill`. No `Flag` | `Push(n)`, `SetValues(list)`, `Clear`, `Get`, `SetColor`, `SetRange(min, max)` |
+| `Log` (also `Feed`) | `MaxEntries` (default 100), `MaxRows` (lines shown), `Timestamps`, `TimeFormat`, `EmptyText` | `Push(text, color?)`, `Clear`, `Get`, `SetMaxEntries`, `SetTitle` |
+| `Image` | `Image` (asset id, link, file, preset or `"Avatar"`), `Height`, `Caption`, `ScaleType` | `SetImage`, `SetCaption`, `SetTitle` |
+
+Status list rows are strings (one muted wrapped line) or `{ Text, Value, Tone }`. Table rows are value lists in column order or tables keyed by column `Key`; add `Highlight = true` to mark a row and `Colors = { [key or index] = color }` to colour single cells.
+
+## Coloured text
+
+Status keys and values, status list rows, table cells, progress text, labels and paragraphs are rich text.
+
+- Theme tags follow the theme: `"<Success>Online</Success>"`, `"<Warning>3 left</Warning>"`, `"<Error>Down</Error>"`, `"<Accent>…</Accent>"`, `"<Muted>…</Muted>"`. Every theme key works as a tag.
+- `KaitUI.Colorize(text, color)` builds it: a theme key gives a theme tag, a `Color3` or `"#rrggbb"` gives a fixed `<font color>`.
+- Plain Roblox rich text (`<b>`, `<i>`, `<font color="#ff5a5a">`) also works.
+- Whole-value colours accept a theme key string, `Color3`, `"#rrggbb"` or `{ r, g, b }`: status `Color` / `Tone`, status list `Tone` / `Color`, table column `Color` (or a function of `value, row`), progress `Color` / `TextColor`, label `Color`.
+- Escape `<`, `>` and `&` in user-provided text you put into these elements.
+
+Theme keys: `Background`, `Surface`, `Surface2`, `Surface3`, `Stroke`, `StrokeHover`, `Accent`, `AccentDark`, `Text`, `Muted`, `Success`, `Warning`, `Error`.
+
+## Window
+
+Useful options: `Size` (UDim2), `MinSize` / `MaxSize` (Vector2), `Icon`, `Theme`, `UIScale` (0.6 to 1.5), `AdaptiveSize` (default true: scale with screen resolution), `Density` (`"Compact"`, `"Default"`, `"Comfortable"`), `PerformanceMode` (`true` or `"Auto"`), `CloseButton` (default true: an × that asks, then unloads), `CloseConfirm`, `OnClose` (runs before any unload; stop your loops there), `Backdrop` (`{ Weather = "Snow" }` or false), `Search`, `Profile`, `Loading`, `Disclaimer`, `ToggleButton`, `IslandDraggable` (default true).
+
+Useful methods: `Notify({ Title, Content, Type = "Success", Duration, Buttons, Progress, Thumbnail })` (returns a handle with `Close`, `SetTitle`, `SetContent`, `SetProgress(0..1)`), `Confirm({ Title, Content, ConfirmText, Callback })`, `Dialog({ Buttons = { … } })`, `Toggle(open?)`, `Minimize()`, `Restore()`, `SelectTab(tab)`, `SetUIScale(n)`, `SetAdaptiveSize(bool)`, `SetTheme` (on `KaitUI`), `SaveConfig` / `LoadConfig` / `ListConfigs`, `ResetIslandPosition()`, `Close(force?)`, `Destroy()`.
+
+Minimizing folds the window into a Dynamic Island at the top of the screen. Players can drag it anywhere; `Pin = true` statuses show on it with their colours.
+
+Overlays live outside the window, so they stay up while it is hidden or minimized. Both are draggable and one per window:
+
+- `Window:CreateWatermark({ Text, Fields = { "FPS", "Ping", "Time" }, Position = "TopLeft" })`: a stats pill. Handle: `SetVisible`, `SetText`, `SetFields`, `SetPosition`, `Destroy`.
+- `Window:CreateKeybindList({ Title = "Keybinds", Position = "Right", ShowAll = false })`: lists keybinds with keys; entries with a `Linked` toggle light up while it is on. Handle: `SetVisible`, `SetTitle`, `SetShowAll`, `SetPosition`, `Destroy`.
+
+## Theme
+
+- `KaitUI:SetTheme("Midnight")` or `KaitUI:SetTheme({ Accent = Color3.fromRGB(128, 160, 246) })`; every colour cross-fades live.
+- Presets: KaitUI (default, teal), Midnight, Nebula, Synthwave, Sakura, Velvet, Rose, Crimson, Sunset, Amber, Gold, Cyber, Toxic, Matcha, Emerald, Aurora, Ocean, Frost, Abyss, Mono, Halloween, Haunted, Christmas, Valentine, Lunar, Tropical, Dracula, Coffee.
+- `Tab:CreateThemeManager({ Side = "Right" })` gives players presets, weather, dim, transparency, drag skeleton, adaptive size, performance mode, UI scale, density, background image and colour pickers. All of it is saved in configs under the hidden `__Theme` flag.
+- Read colours from `KaitUI.Theme.Accent` and so on; don't cache them across theme changes.
+
+## Optional
+
+- [README: Home](README.md#home): profile card, live stats (FPS, ping and memory tinted by health), game and executor cards, feature list, changelog pages.
+- [README: Configs](README.md#configs): file format, share codes, autoload per account.
+- [README: Icons](README.md#icons) and [Fonts](README.md#fonts).
