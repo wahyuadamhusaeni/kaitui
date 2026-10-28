@@ -340,7 +340,22 @@ function Window:_fade(target, duration)
 end
 
 function Window:SelectTab(tab)
-    if self.CurrentTab == tab then
+    -- A tab handle, its name or its position in the sidebar.
+    if type(tab) ~= "table" or getmetatable(tab) ~= Tab then
+        local wanted = tab
+        tab = nil
+        for index, entry in ipairs(self.Tabs) do
+            if entry.Name == wanted or index == wanted then
+                tab = entry
+                break
+            end
+        end
+        if not tab then
+            Library._warn(("SelectTab: no tab %s. Pass a tab, its name or its number."):format(Library._describe(wanted)))
+            return
+        end
+    end
+    if self.CurrentTab == tab or not tab._page then
         return
     end
     local previous = self.CurrentTab
@@ -406,6 +421,12 @@ end
 
 function Window:_settleOut()
     local page = self._outPage
+    -- A transition can still be pending when the window is destroyed; its pages
+    -- are locked then.
+    if self._destroyed then
+        self._outPage = nil
+        return
+    end
     if page then
         page.Parent = self.Content
         page.Visible = false
@@ -416,6 +437,10 @@ end
 
 function Window:_settleIn()
     local page = self._inPage
+    if self._destroyed then
+        self._inPage = nil
+        return
+    end
     if page then
         page.Parent = self.Content
         page.Position = UDim2.fromOffset(0, 0)

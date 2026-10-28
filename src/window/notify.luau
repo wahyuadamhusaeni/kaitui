@@ -2,7 +2,7 @@ function Window:Notify(opts)
     -- Image used to be only another name for Icon. On its own it still is; next
     -- to an explicit Icon it becomes the larger picture on the left.
     local explicitIcon = type(opts) == "table" and opts.Icon or nil
-    opts = normalize(opts, { Text = "Content", Message = "Content", Image = "Icon" })
+    opts = normalize(opts, { Name = "Title", Text = "Content", Message = "Content", Image = "Icon" })
     if self.Minimized and self._islandActivity then
         self._islandActivity(opts)
     end

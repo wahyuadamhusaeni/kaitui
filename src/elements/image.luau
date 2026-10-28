@@ -134,6 +134,11 @@ function Tab:Image(opts)
             return true
         end
         local asset, err
+        local named = ('Image "%s"'):format(tostring(opts.Name or opts.Caption or "Image"))
+        if type(source) ~= "number" and type(source) ~= "string" then
+            Library._warn(("%s: the image should be an asset id (a number), \"rbxassetid://...\", a link, a file in the backgrounds folder, a preset name or \"Avatar\". Got %s."):format(named, Library._describe(source)))
+            return false, "not an image source"
+        end
         if type(source) == "number" then
             asset = "rbxassetid://" .. math.floor(source)
         elseif type(source) == "string" and ({ avatar = true, headshot = true })[source:lower()] then
@@ -150,7 +155,7 @@ function Tab:Image(opts)
             return false, "replaced by a newer image"
         end
         if not asset then
-            warn("[KaitUI] image: " .. tostring(err))
+            Library._warn(named .. ": " .. tostring(err) .. ". Use an asset id, \"rbxassetid://...\", a link, a file in the backgrounds folder, a preset name or \"Avatar\".")
             return false, err
         end
         image.ImageTransparency = 1

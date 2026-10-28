@@ -2,6 +2,10 @@ function Library._parseAmount(text)
     text = string.lower(tostring(text)):gsub("[%s,_%$]", "")
     text = text:gsub("kg$", ""):gsub("/s$", "")
     local number = tonumber(text)
+    -- tonumber accepts "nan" and "inf"; neither is an amount.
+    if number ~= nil and (number ~= number or math.abs(number) == math.huge) then
+        return nil
+    end
     if number then
         return number
     end
@@ -39,7 +43,7 @@ function Tab:Input(opts)
         Position = UDim2.fromOffset(boxIcon and 30 or 8, 0),
         Size = UDim2.new(1, boxIcon and -38 or -16, 1, 0),
         BackgroundTransparency = 1,
-        Text = opts.Default or "",
+        Text = (type(opts.Default) == "string" or type(opts.Default) == "number") and tostring(opts.Default) or "",
         PlaceholderText = opts.Placeholder or "",
         PlaceholderColor3 = Theme.Muted,
         TextColor3 = Theme.Text,
@@ -127,6 +131,9 @@ function Tab:Input(opts)
                 local number = Library._parseAmount(box.Text)
                 if number then
                     lastText, value = box.Text, number
+                elseif box.Text == "" then
+                    -- Empty clears it (a reset to an empty default goes through here).
+                    lastText, value = "", nil
                 else
                     box.Text = lastText
                     return
@@ -147,6 +154,12 @@ function Tab:Input(opts)
         _saveValue = opts.Numeric and function()
             return lastText
         end or nil,
+        -- Hidden or disabled while typing: editing ends, so nothing commits later.
+        _onHide = function()
+            if box:IsFocused() then
+                box:ReleaseFocus()
+            end
+        end,
     }, frame, "Input")
 end
 

@@ -649,26 +649,36 @@ function Window:_buildSearch(content)
             update()
         end
     end)
+    -- Results rebuild a few dozen rows, so fast typing waits for a short pause;
+    -- clearing the box still closes the list right away.
+    local typedGeneration, updatePending = 0, false
     box.FocusLost:Connect(function(enterPressed)
         tween(fieldStroke, { Color = Theme.Stroke }, 0.2)
         tween(field, { BackgroundTransparency = 0.2 }, 0.2)
         tween(icon, { ImageColor3 = Theme.Muted }, 0.2)
+        -- Enter right after typing: catch the results up first, so it opens
+        -- the match for what was typed rather than the previous one.
+        if enterPressed and updatePending then
+            typedGeneration += 1
+            updatePending = false
+            update()
+        end
         if enterPressed and open then
             choose(results[selected])
         end
     end)
-    -- Results rebuild a few dozen rows, so fast typing waits for a short pause;
-    -- clearing the box still closes the list right away.
-    local typedGeneration = 0
     box:GetPropertyChangedSignal("Text"):Connect(function()
         typedGeneration += 1
         local generation = typedGeneration
         if string.match(box.Text, "^%s*$") then
+            updatePending = false
             update()
             return
         end
+        updatePending = true
         task.delay(0.08, function()
             if generation == typedGeneration and not self._destroyed then
+                updatePending = false
                 update()
             end
         end)

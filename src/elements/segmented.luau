@@ -67,19 +67,22 @@ function Tab:Segmented(opts)
     })
 
     local handle = {}
-    local options, buttons = {}, {}
+    -- options are the labels (strings, for display and matching); values keep what
+    -- the script gave, so numeric options come back as numbers.
+    local options, values, buttons = {}, {}, {}
     local index = 0
     local hovered = nil
     local stackedNow = false
 
     local function sanitize(list)
-        local out = {}
+        local out, raw = {}, {}
         if type(list) == "table" then
             for _, option in ipairs(list) do
                 table.insert(out, tostring(option))
+                table.insert(raw, option)
             end
         end
-        return out
+        return out, raw
     end
 
     -- Option text first, so numeric options ({ 30, 60, 120 }) match by value;
@@ -214,14 +217,14 @@ function Tab:Segmented(opts)
             return
         end
         index = i
-        handle.Value = options[i]
+        handle.Value = values[i]
         moveThumb()
         paint(0.2)
         if not fromClick then
             flashStroke(frameStroke)
         end
         if not silent then
-            safeCall(opts.Callback, options[i])
+            safeCall(opts.Callback, values[i])
         end
     end
 
@@ -298,35 +301,36 @@ function Tab:Segmented(opts)
     end
 
     function handle:Get()
-        return options[index]
+        return values[index]
     end
 
     function handle:GetOptions()
-        return table.clone(options)
+        return table.clone(values)
     end
 
     -- Replaces the options. The value stays if it is still offered, otherwise
     -- the first option is picked (and the callback runs unless silent).
     function handle:SetOptions(list, silent)
         local current = options[index]
-        options = sanitize(list)
-        if waiting ~= nil and resolve(waiting) then
-            current = options[resolve(waiting)]
-            waiting = nil
-        end
+        options, values = sanitize(list)
         local keep = current ~= nil and table.find(options, current) or nil
         index = keep or 0
-        handle.Value = options[index]
+        handle.Value = values[index]
         build()
-        if not keep and options[1] then
+        -- A value set before its option existed is picked now, like any other pick.
+        local pending = waiting ~= nil and resolve(waiting) or nil
+        waiting = nil
+        if pending then
+            pick(pending, silent)
+        elseif not keep and options[1] then
             pick(1, silent)
         end
     end
     handle.Refresh = handle.SetOptions
 
-    options = sanitize(opts.Options)
+    options, values = sanitize(opts.Options)
     index = resolve(opts.Default) or (options[1] and 1 or 0)
-    handle.Value = options[index]
+    handle.Value = values[index]
     build()
 
     frame:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()

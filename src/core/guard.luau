@@ -84,30 +84,77 @@ end
 
 -- Elements carry their methods as closures, so each returned object gets its
 -- public functions wrapped too; windows and tabs share the guarded metatables.
-function guardObject(...)
-    for index = 1, select("#", ...) do
-        local object = select(index, ...)
-        if type(object) == "table" and not guardedObjects[object] then
-            local meta = getmetatable(object)
-            if meta ~= Window and meta ~= Tab then
-                guardedObjects[object] = true
-                for key, value in pairs(object) do
-                    if type(key) == "string" and type(value) == "function" and key:sub(1, 1) ~= "_" then
-                        object[key] = guarded(value)
-                    elseif type(key) == "number" and type(value) == "table" then
-                        guardObject(value)
-                    end
+-- Wrappers already made, so an object seen again only gets its new methods
+-- wrapped (a Confirm button replaces SetText and Disarm after creation).
+local guardWrappers = setmetatable({}, { __mode = "k" })
+local function guardOne(object, seen)
+    if type(object) ~= "table" or seen[object] then
+        return
+    end
+    seen[object] = true
+    local meta = getmetatable(object)
+    if meta == Window or meta == Tab then
+        return
+    end
+    guardedObjects[object] = true
+    for key, value in pairs(object) do
+        if type(key) == "string" and type(value) == "function" and key:sub(1, 1) ~= "_" and not guardWrappers[value] then
+            -- Handle.Set(true) (a dot instead of a colon) works like Handle:Set(true).
+            local method = value
+            local wrapper = guarded(function(first, ...)
+                if first ~= object then
+                    return method(object, first, ...)
                 end
-            end
+                return method(first, ...)
+            end)
+            guardWrappers[wrapper] = true
+            object[key] = wrapper
+        elseif type(key) == "number" and type(value) == "table" then
+            guardOne(value, seen)
         end
+    end
+end
+
+function guardObject(...)
+    local seen = {}
+    for index = 1, select("#", ...) do
+        guardOne((select(index, ...)), seen)
     end
     return ...
 end
 
-for _, class in ipairs({ Library, Window, Tab }) do
+-- Library has one instance, so KaitUI.CreateWindow({...}) can be called with a
+-- dot too. A window or tab can't be guessed, so a dot there gets a clear error.
+for key, value in pairs(Library) do
+    if type(key) == "string" and type(value) == "function" and key:sub(1, 1) ~= "_" then
+        local method = guarded(value)
+        Library[key] = function(first, ...)
+            if first ~= Library then
+                return method(Library, first, ...)
+            end
+            return method(first, ...)
+        end
+    end
+end
+for _, entry in ipairs({ { Window, "Window" }, { Tab, "Tab" } }) do
+    local class, className = entry[1], entry[2]
     for key, value in pairs(class) do
         if type(key) == "string" and type(value) == "function" and key:sub(1, 1) ~= "_" then
-            class[key] = guarded(value)
+            local method = guarded(value)
+            class[key] = function(self, ...)
+                if type(self) ~= "table" or getmetatable(self) ~= class then
+                    error(("[KaitUI] %s.%s was called with a dot. Use a colon: %s:%s(...)"):format(className, key, className, key), 2)
+                end
+                -- A closed window's methods do nothing, so a script loop that
+                -- keeps calling Window:Notify after the player closed it is fine.
+                if class == Window and rawget(self, "_destroyed") and key ~= "Destroy" and key ~= "Unload" and key ~= "Close" then
+                    if key == "Notify" then
+                        return Library._inertToast()
+                    end
+                    return nil
+                end
+                return method(self, ...)
+            end
         end
     end
 end

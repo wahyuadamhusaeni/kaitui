@@ -71,7 +71,9 @@ Settings:CreateThemeManager({ Side = "Right" })
 
 ## Conventions
 
-Every constructor also works without the `Create` prefix. `Tab:Toggle` is the same as `Tab:CreateToggle`. Every element handle also has `Destroy()`, which removes the card, its listeners and its flag, and `SetVisible(bool)` / `IsVisible()`. Every constructor takes `Visible = false` to start hidden (see [Visibility](#visibility)) and `Tooltip` to explain itself on hover (see [Tooltips](#tooltips)).
+Every constructor also works without the `Create` prefix. `Tab:Toggle` is the same as `Tab:CreateToggle`.
+
+**Mistakes in a script don't break the window.** An option of the wrong type is converted when the meaning is clear (`Name = 12` becomes `"12"`, `Min = "10"` becomes `10`) and otherwise ignored, so the default applies. Each mistake prints one warning in the console that names the element, the option, what it should be and what it got, for example `[KaitUI] "Auto Farm": Callback should be a function, got string "print". It was ignored.` Watch for `[KaitUI]` lines while writing a script. The library also warns when two elements share a `Flag`, when a value can't be saved in a config, when a key name isn't a key, when something is added to a tab whose sub tabs hide it, and when a callback errors (naming the element). Element handles work with a dot or a colon (`Toggle.Set(true)` is the same as `Toggle:Set(true)`), and so does the library (`KaitUI.Notify{...}`); a window or tab method called with a dot stops with an error that says to use a colon. Every element handle also has `Destroy()`, which removes the card, its listeners and its flag, and `SetVisible(bool)` / `IsVisible()`. Every constructor takes `Visible = false` to start hidden (see [Visibility](#visibility)) and `Tooltip` to explain itself on hover (see [Tooltips](#tooltips)).
 
 ---
 
@@ -251,7 +253,7 @@ The sidebar is an inset rounded rail: the logo on top, then one tile per tab wit
 Home = {
     Name = "Home",
     Title = "Welcome to My Hub!",
-    Welcome = "Welcome back,",
+    Welcome = "Welcome back",
     Tier = "Premium",
     TierIcon = "crown",
     Expiry = os.time() + 3600 * 12,
@@ -260,7 +262,7 @@ Home = {
     Discord = "dsc.gg/myhub",
     Website = "myhub.com",
     Links = {
-        { Icon = "youtube", Title = "Showcase", Text = "youtube.com/@myhub", Button = "Copy Link" },
+        { Icon = "youtube", Title = "Showcase", Text = "youtube.com/@myhub" },
     },
     HideName = false,
     HideAvatar = false,
@@ -307,20 +309,20 @@ The game card has Rejoin, Server Hop, Join Lowest Server and Copy Job ID. The ex
 | --- | --- | --- | --- |
 | `Name` / `Desc` / `Icon` | string | `"Home"`, `"house"` | The tab itself. |
 | `Title` | string | `"Home"` | Page heading. |
-| `Welcome` | string | `"Welcome back,"` | Line above the display name. |
+| `Welcome` | string | `"Welcome back"` | Line above the display name, shown in capitals. |
 | `Tier` | string \| false | `"Free"` | Badge on the player card. `false` hides it. |
 | `TierIcon` | string | window icon | Icon in the badge. |
 | `Expiry` | number \| string \| function | — | Under the badge. A unix time counts down (`11h 57m`), a string is shown as is, a function is called every second. |
-| `Stats` | table | six shown above | Any of `"Players"`, `"Friends"`, `"Execs"`, `"Session"`, `"FPS"`, `"Ping"`, `"Executor"`, `"Game"`, `"Region"`, `"Time"`, `"ServerAge"`, `"Memory"`. |
-| `StatColors` | boolean | `true` | Tint `FPS`, `Ping` and `Memory` green, amber or red by how healthy they are (FPS 50+ / 30+, ping under 90 / 180 ms, memory under 1.5 / 3 GB). |
+| `Stats` | table | `Players`, `Execs`, `Session`, `FPS`, `Ping` | Any of `"Players"`, `"Friends"`, `"Execs"`, `"Session"`, `"FPS"`, `"Ping"`, `"Executor"`, `"Game"`, `"Region"`, `"Time"`, `"ServerAge"`, `"Memory"`. |
+| `StatColors` | boolean | `true` | Tint `FPS`, `Ping` and `Memory` green, amber or red by how healthy they are (FPS 50+ / 30+, ping under 150 / 300 ms (the round trip, as Roblox's own stats show it), memory under 1.5 / 3 GB). |
 | `StatsFolder` | string | config folder | Where the execution counter is stored. |
 | `TimeFormat` | string | `"%H:%M"` | `os.date` format for the time stat. |
 | `SupportedExecutors` | table | — | Names checked against the executor. Without it, the card checks for the file, clipboard and request functions. |
 | `Discord` / `Website` | string | — | Link cards with a copy button. |
-| `DiscordTitle` / `WebsiteTitle` | string | `"Join the community"` / `"Supported games"` | Card titles. |
+| `DiscordTitle` / `WebsiteTitle` | string | `"Community"` / `"Website"` | Card titles. |
 | `Links` | table | — | More link cards: `{ Icon, Title, Text, Button, Copy, Callback }`. |
 | `HideName` / `HideAvatar` | boolean | `false` | Start with the privacy switches on. |
-| `Features` | table \| false | automatic | The feature list card. A table takes `Title`, `Desc` (card text, instead of the count), `Icon`, `Button` and `List`. |
+| `Features` | table \| false | automatic | The feature list card. A table takes `Title`, `Desc` (card text, instead of the count), `Icon` and `List`. |
 | `Features.List[n]` | table \| string | — | A group `{ Name, Icon, Items }`, or a bare item. |
 | `Items[n]` | string \| table | — | `{ Name, Desc, Tag, Icon, Callback }`. `Callback` runs when it's picked. |
 | `OverviewName` / `TabIcon` | string | `"Overview"` / `"layout-grid"` | The first sub tab when `Pages` is set. |
@@ -815,6 +817,7 @@ Toggle:Set(false)
 | `Name` | string | `"Toggle"` | The label. |
 | `Desc` | string | — | Hint text under the label. |
 | `CurrentValue` | boolean | `false` | The initial state. The callback fires once on creation if `true`. |
+| `KeepOnClose` | boolean | `false` | Closing the window switches every toggle off so feature loops stop. `true` leaves this one as it is: use it for settings, not features. Toggles in the config and theme managers already do this. |
 | `Flag` | string | — | The save key. |
 | `Callback` | function | — | Runs with the new value on every change. |
 
@@ -960,7 +963,7 @@ The options sit side by side in a pill-shaped track, all the same width. The pic
 | Member | Description |
 | --- | --- |
 | `.Value` | The picked option. |
-| `Set(value, skipCallback?)` | Pick an option by its text or its index. Values that aren't in the list are ignored. |
+| `Set(value, skipCallback?)` | Pick an option by its value, its text or its index. A value that isn't in the list yet is kept and picked when `SetOptions` adds it. Numeric options come back as numbers. |
 | `Get()` | The picked option. |
 | `SetOptions(options, skipCallback?)` | Replace the options. The pick stays if it's still in the list. Otherwise the first option is picked and the callback runs, unless `skipCallback` is true. |
 | `GetOptions()` | A copy of the options. |
@@ -1209,8 +1212,8 @@ Input:Set("KAKAIT")
 
 | Member | Description |
 | --- | --- |
-| `Set(text)` | Replace the text. |
-| `Get()` | The current text. |
+| `Set(text, skipCallback?)` | Replace the text. Runs `Callback(text, false)` when it changed, unless `skipCallback`. On a `Numeric` input, text that isn't a number is ignored and `""` clears it. |
+| `Get()` | The current text, or the number on a `Numeric` input (`nil` when empty). |
 
 ---
 
@@ -1264,7 +1267,7 @@ The name and description sit on top, and the box spans the row under them. `Ente
 | `Set(text, skipCallback?)` | Replace the text. It is cut to `MaxLength`. Unless skipped, `OnChanged` and `Callback` run if the text changed. |
 | `Get()` | The current text. |
 | `SetPlaceholder(text)` | Change the placeholder. |
-| `SetTitle(text)` | Change the label. |
+| `SetTitle(text)` | Change the label (only when the textarea was made with a `Name`). |
 | `Focus()` | Put the caret in the box. |
 
 ---
@@ -1497,8 +1500,8 @@ New rows come from `NewRow` (a table, or a function returning one), else from ea
 | --- | --- | --- | --- |
 | `Columns[i].Type` | string | — | `"Text"`, `"Number"`, `"Toggle"` or `"Dropdown"`. |
 | `Columns[i].Options` / `Min` / `Max` / `Integer` / `Default` / `Placeholder` | — | — | Per-type settings as above. |
-| `Columns[i].Searchable` / `SearchAfter` / `SearchPlaceholder` / `MaxRows` | boolean / number / string / number | — / — / `"Search"` / `6` | Dropdown cells: a search box at the top of the list (`Searchable = true`, or once there are more than `SearchAfter` options) that filters as you type; Enter picks the first match. `MaxRows` is how many options show before the list scrolls. |
-| `OnChanged` | function | — | `function(rows)` after any edit, add or remove, and after `SetRows` unless it's called with `silent = true`. |
+| `Columns[i].Searchable` / `SearchAfter` / `SearchPlaceholder` / `MaxRows` | boolean / number / string / number | — / — / `"Search"` (`"Search N options"` on long lists) / `6` | Dropdown cells: a search box at the top of the list (`Searchable = true`, or once there are more than `SearchAfter` options) that filters as you type; Enter picks the first match. `MaxRows` is how many options show before the list scrolls. |
+| `OnChanged` | function | — | `function(rows)` after the player edits, adds or removes a row, and after `SetRows` unless it's called with `silent = true`. `AddRow`, `UpdateRow` and `RemoveRow` from a script don't run it. |
 | `NewRow` | table \| function | — | The row the Add button inserts. |
 | `AllowAdd` / `AllowRemove` | boolean | `true` | The Add row button under the table, and the remove column at the end of each row. |
 | `AddText` | string | `"Add row"` | Text on the Add button. |
@@ -1832,15 +1835,15 @@ Window:LoadAutoload()
 The config manager is a groupbox with, from top to bottom:
 
 - a **config name** box and the config picker
-- **Create** / **Save**, **Load** / **Delete**, **Set autoload** / **Clear autoload**, **Rename** / **Reset**
-- a status line: `loaded: <name> | autoload: <name>`
-- **Autoload mode**: *All accounts* or *This account*
-- **Refresh list**
+- **Save** / **Load**, **Delete** / **Refresh**
+- an **Auto Load Config** switch for the picked config
+- a status line: `<n> saved · loaded: <name> · auto: <name>` (rows in the list are tagged `loaded` and `auto` too)
+- under **more**: **Rename** / **Reset** and **Autoload mode** (*All accounts* or *This account*)
 - a **share** section: **Copy code** puts the current settings on the clipboard as a code, and **Import code** applies a pasted code and saves it. It's saved under the name in the name box, or else the name inside the code (with ` (2)`, ` (3)`... added rather than overwriting a config you already have).
 
 Save with nothing picked creates a config from the typed name. **Rename** renames the picked config to the typed name and moves the loaded name and autoloads with it. **Reset** puts every flagged element back to the value it was created with and deletes the script's whole `FolderName` folder (configs, saved themes, the default theme, autoload, settings, execution count), after a confirm. Names can't contain `\ / : * ? " < > |`.
 
-`LoadAutoload` can run before every element exists. Values for flags that no element has claimed yet are held and applied as soon as an element with that flag is created, and saving writes them back, so a config never loses settings for elements that only exist some of the time (a game-specific tab, say).
+`LoadAutoload` can run before every element exists. Values for flags that no element has claimed yet are held and applied right after an element with that flag is created (on the next frame, so `Get()` straight after `LoadConfig` still shows the old value), and saving writes them back, so a config never loses settings for elements that only exist some of the time (a game-specific tab, say).
 
 ### File format
 
@@ -1854,7 +1857,7 @@ A config file and a share code are the same readable JSON, so a code is just the
 - `Config` is the flags as their own JSON string. Each flag is `{ "Value": ..., "Type": ... }`. Colours are `{ "Hex": "rrggbb" }`, keybinds are key names (`"RightShift"`), and a dropdown with nothing picked has no `Value`.
 - Older config files (bare flag tables, colours as RGB arrays) still load, and are rewritten in the new format on the next save.
 
-Configs only change when you press **Create** or **Save** (or call `SaveConfig`); nothing is written automatically. The autoload mode lives in `<folder>/configsettings.txt`, apart from the configs, so loading a config never flips it. *This account* keeps the autoload in `autoload_<UserId>.txt`, so other accounts on the same PC don't load it. Switching modes moves the current autoload across.
+Configs only change when you press **Save** (or call `SaveConfig`); nothing is written automatically. The autoload mode lives in `<folder>/configsettings.txt`, apart from the configs, so loading a config never flips it. *This account* keeps the autoload in `autoload_<UserId>.txt`, so other accounts on the same PC don't load it. Switching modes moves the current autoload across.
 
 Requires `writefile` / `readfile`.
 
@@ -1863,7 +1866,7 @@ Requires `writefile` / `readfile`.
 | Name | Type | Default | Description |
 | --- | --- | --- | --- |
 | `FolderName` | string | `"KaitUI"` | Folder in the executor workspace. Can be nested, like `"MyHub/Game"`; missing folders are made. |
-| `FileName` | string | none | Optional config used when `SaveConfig` / `LoadConfig` get no name. With none set, there is no default config: only configs you create exist. |
+| `FileName` | string | none | The config `SaveConfig()` / `LoadConfig()` use when given no name, until a save or load by name: after that a bare call uses the last config saved or loaded. |
 
 `CreateConfigManager` takes `Name`, `Icon`, `Side` and `Placeholder`. Called on a groupbox it adds its rows there instead of making its own.
 
@@ -2072,6 +2075,9 @@ The library source is split into modules under `src/`, listed in build order in 
 node build.js             # writes dist/KaitUI.luau, the minified library that scripts loadstring
 node build.js --readable  # also writes dist/KaitUI.readable.luau, unminified, for reading error positions (git-ignored)
 node build.js --check     # exits with an error if the built file is out of date
+node tests/run.js         # runs the library for real, headless (see below)
 ```
+
+`node tests/run.js` runs `examples/demo.luau`, `tests/quickstart.luau` and `tests/misuse.luau` with the library in the [luau CLI](https://github.com/luau-lang/luau/releases) (on `PATH` as `luau`, or set `LUAU` to its path), against a mock of the Roblox client API in `tests/mock.luau`. `tests/scenario.luau` then uses the window like a player, with a mouse and again as a touch device: every tab and sub tab, minimize and restore, the hide key, every button, every text box, every element's `SetVisible` / `SetDisabled` / `SetTooltip`, flags, configs, themes, Performance Mode, overlays, notifications and the close button. Any error or warning fails the run. `tests/misuse.luau` feeds every constructor and handle wrong types, missing options and common scripting mistakes: nothing may error, and its warnings (listed with `--warnings`) are the messages scripters will see. Run it before every push.
 
 All modules are joined into one function and share its scope, so a module can only use locals declared in modules above it, and the whole library stays under the Luau limit of 200 locals per function (189 are in use). Don't edit `dist/KaitUI.luau` directly; it is overwritten on every build. Rebuild and commit it together with your `src/` changes, since the loadstring URL serves it straight from the repo.

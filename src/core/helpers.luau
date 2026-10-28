@@ -457,9 +457,11 @@ local function safeCall(callback, ...)
     if type(callback) ~= "function" then
         return
     end
+    Library._callbackOwner = nil
     local ok, err = pcall(callback, ...)
     if not ok then
-        warn("[KaitUI] callback error: " .. tostring(err))
+        local owner = Library._callbackOwner
+        warn("[KaitUI] callback error" .. (owner and (' in "' .. tostring(owner) .. '"') or "") .. ": " .. tostring(err))
     end
 end
 
@@ -493,6 +495,10 @@ local function numberFormat(min, max, step)
         -- Multiples of the step (16..200 by 5 gives 16, 20, 25), as scripts and saved
         -- configs expect. Rounded to the decimals so 0.1 steps don't give 0.7000000000000001.
         snap = function(value)
+            -- NaN ("nan" typed in a box) and infinities fall back to the minimum.
+            if value ~= value or math.abs(value) == math.huge then
+                value = min
+            end
             value = math.floor(value / step + 0.5) * step
             value = tonumber(string.format(pattern, value)) or value
             return math.clamp(value, min, max)

@@ -877,6 +877,10 @@ function Tab:Dropdown(opts)
     end)
 
     function self_:Set(value, silent)
+        -- Set({ "B" }) on a single dropdown means "B", as CurrentOption = { "B" } does.
+        if not multi and type(value) == "table" and getmetatable(value) == nil then
+            value = value[1]
+        end
         selected = {}
         if multi then
             for _, item in ipairs(type(value) == "table" and value or { value }) do

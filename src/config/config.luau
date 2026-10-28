@@ -113,6 +113,13 @@ local function collectFlags(self)
     for flag, element in pairs(Library.Flags) do
         if not ignore[flag] and element._type and type(element.Get) == "function" then
             local ok, entry = pcall(serializeFlag, element)
+            -- One flag holding something JSON can't store (an Instance, a Color3 in
+            -- a text box) is left out with a warning instead of failing the whole save.
+            if ok and not pcall(HttpService.JSONEncode, HttpService, entry) then
+                ok = false
+                Library._warn(('Flag "%s" (%s) holds %s, which a config cannot store. It was left out of the save.'):format(
+                    flag, tostring(element._type), Library._describe(entry.Value)))
+            end
             if ok then
                 data[flag] = entry
             end
@@ -592,10 +599,8 @@ function Window:GetAutoloadMode()
 end
 
 function Window:GetAutoload(scope)
-    if scope then
-        return readText(autoloadPath(self, scope))
-    end
-    return readText(autoloadPath(self, "Account")) or readText(autoloadPath(self, "Global"))
+    -- The current mode's file only: a leftover file from the other mode doesn't count.
+    return readText(autoloadPath(self, scope or self:GetAutoloadMode()))
 end
 
 function Window:SetAutoload(name, scope)

@@ -62,6 +62,23 @@ function Tab:ThemeManager(opts)
             end
         end,
     })
+    -- SetTheme from a script moves the picker too, so it never shows (or saves)
+    -- a preset the window isn't using.
+    local function followPreset()
+        local name = Library.ThemeName
+        local wanted = Library.ThemePresets[name or ""] and name or nil
+        if wanted and presets:Get() ~= wanted then
+            presets:Set(wanted, true)
+        end
+    end
+    table.insert(Library._themeListeners, followPreset)
+    presets._listeners = presets._listeners or {}
+    table.insert(presets._listeners, function()
+        local at = table.find(Library._themeListeners, followPreset)
+        if at then
+            table.remove(Library._themeListeners, at)
+        end
+    end)
     -- Menu look (weather, scale, background...) gets its own groupbox, apart from the colors.
     local menu = host
     if not self._groupbox and opts.Menu ~= false then

@@ -10,6 +10,7 @@ function Window:_createOpenButton(opts)
         Text = "",
         AutoButtonColor = false,
         ZIndex = 30,
+        Visible = false,
         Parent = gui,
     })
     corner(pill, UDim.new(1, 0))
@@ -80,6 +81,11 @@ function Window:_toggleButtonAllowed()
 end
 
 function Window:_refreshToggleButton()
+    -- The open pill brings back a hidden window, so it shows only then: not
+    -- during the loader, not over an open window, not under the island.
+    if self.OpenButton then
+        self.OpenButton.Visible = self._introDone == true and not self._destroyed and not self.Open
+    end
     local button = self.ToggleButton
     if not button then
         return

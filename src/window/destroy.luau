@@ -23,8 +23,13 @@ function Window:Destroy()
     if self._destroyed then
         return
     end
-    -- OnClose runs first, while everything still exists, however the window goes
-    -- (the close button, a script's Destroy, or re-executing the script).
+    -- OnClose runs first, once, while everything still exists, however the window
+    -- goes (the close button, a script's Destroy, or re-executing the script).
+    -- _closing stops an OnClose that unloads (Destroy, KaitUI:Destroy) from recursing.
+    if self._closing then
+        return
+    end
+    self._closing = true
     if type(self._onClose) == "function" then
         safeCall(self._onClose)
     end
@@ -51,6 +56,13 @@ function Window:Destroy()
     for _, element in ipairs(self._toggles or {}) do
         if not element._destroyed and element.Value == true then
             task.spawn(pcall, element.Set, element, false)
+        end
+    end
+    -- The window's flags go with it, so a script can't switch a feature back on
+    -- through KaitUI.Flags after unload, and a re-run registers them afresh.
+    for flag, element in pairs(Library.Flags) do
+        if element._window == self then
+            Library.Flags[flag] = nil
         end
     end
     -- Overlays live outside the window body, so they go explicitly.
@@ -82,8 +94,9 @@ function Window:Destroy()
     -- if any of it fails the gui is removed straight away instead of being
     -- left frozen on screen.
     local ok, err = pcall(function()
+        -- An open Confirm counts as cancelled, so a script waiting on it hears back.
         if self._dialog then
-            self._dialog.Close()
+            (self._dialog.Cancel or self._dialog.Close)()
         end
         self:_closePopups()
         local fit = self._fitScale or 1
@@ -100,12 +113,17 @@ function Window:Destroy()
             tween(self._backdropTintFrame, { BackgroundTransparency = 1 }, 0.2)
             tween(self._backdropHeat, { BackgroundTransparency = 1 }, 0.2)
         end
-        for _, button in ipairs({ self.ToggleButton, self.OpenButton }) do
+        for _, button in ipairs({ self.ToggleButton or false, self.OpenButton or false }) do
             if typeof(button) == "Instance" and button:IsA("GuiObject") then
                 tween(button, { Size = UDim2.fromOffset(0, 0) }, 0.2, Enum.EasingStyle.Quint)
             end
         end
     end)
+    -- The last window gone: the trusted-call heartbeat goes too, so a closed or
+    -- re-run script doesn't keep the old library alive through it.
+    if #Library.Windows == 0 and Library._disconnectTrusted then
+        Library._disconnectTrusted()
+    end
     if not ok then
         warn("[KaitUI] unload animation failed, removing the window directly: " .. tostring(err))
         remove()

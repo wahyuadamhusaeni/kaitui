@@ -1,7 +1,11 @@
 function Tab:Keybind(opts)
     local frame, frameStroke, _, titleLabel, descLabel
     opts, frame, frameStroke, _, titleLabel, descLabel = beginElement(self, opts, { Title = "Name", Description = "Desc", CurrentKeybind = "Default", Value = "Default" }, "Frame", 110, "Keybind")
+    local given = opts.Default
     opts.Default = Library._keyCode(opts.Default)
+    if given ~= nil and given ~= false and given ~= "None" and opts.Default == nil then
+        Library._warn(('Keybind "%s": CurrentKeybind %s is not a key. Use a KeyCode name such as "F" or "LeftShift"; it starts unbound.'):format(tostring(opts.Name or "Keybind"), Library._describe(given)))
+    end
     local compact = metricsOf(self).Compact
     local chipHeight = metricsOf(self).Chip
 
@@ -64,6 +68,14 @@ function Tab:Keybind(opts)
 
     chip.MouseButton1Click:Connect(function()
         self_.Listening = not self_.Listening
+        -- Only one chip waits for a key at a time, or one press would bind both.
+        if self_.Listening then
+            for _, other in ipairs(self.Window._keybindElements or {}) do
+                if other ~= self_ and other.Listening and type(other._onHide) == "function" then
+                    other._onHide()
+                end
+            end
+        end
         render()
     end)
 

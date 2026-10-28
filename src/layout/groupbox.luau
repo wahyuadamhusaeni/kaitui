@@ -131,13 +131,15 @@ function Tab:Groupbox(opts, icon)
         side = set.Counts[1] <= set.Counts[2] and 1 or 2
     end
     set.Counts[side] += 1
+    -- Order only grows, so a box made after another was destroyed still goes below the rest.
+    set.Order = (set.Order or 0) + 1
 
     local box = create("Frame", {
         Size = UDim2.new(1, 0, 0, 0),
         AutomaticSize = Enum.AutomaticSize.Y,
         BackgroundColor3 = Theme.Surface2,
         BorderSizePixel = 0,
-        LayoutOrder = set.Counts[side],
+        LayoutOrder = set.Order,
         Parent = side == 1 and set.Left or set.Right,
     })
     box:SetAttribute("NoDrag", true)
@@ -904,6 +906,11 @@ function Tab:Groupbox(opts, icon)
     function group:SetTitle(text)
         group.Name = tostring(text)
         title.Text = group.Name
+        -- The empty slot a popped-out box leaves behind carries its name too.
+        local slotLabel = slot and slot.Parent and slot:FindFirstChildWhichIsA("TextLabel")
+        if slotLabel then
+            slotLabel.Text = Library._rich(group.Name) .. '<font transparency="0.4">  ·  popped out, click to dock</font>'
+        end
     end
     group._userVisible = opts.Visible ~= false
     function group:IsVisible()
@@ -925,6 +932,7 @@ function Tab:Groupbox(opts, icon)
                 end
             end
         end
+        box:SetAttribute("Revealing", nil)
         box.Visible = visible
         window._controlsDirty = true
     end
@@ -932,6 +940,9 @@ function Tab:Groupbox(opts, icon)
         box.Visible = false
     end
     function group:Destroy()
+        if group._destroyed then
+            return
+        end
         for index = #group._items, 1, -1 do
             local element = group._items[index]
             if type(element.Destroy) == "function" then
@@ -981,6 +992,7 @@ function Tab:CreateMinimizeOnStart(opts)
     end
     window._minimizeOnStartToggle = self:CreateToggle({
         Name = opts.Name or "Minimize UI on Start",
+        KeepOnClose = true,
         CurrentValue = window:GetMinimizeOnStart(),
         Callback = function(value)
             window:SetMinimizeOnStart(value)
@@ -1013,13 +1025,15 @@ function Tab:Tabbox(opts)
         side = set.Counts[1] <= set.Counts[2] and 1 or 2
     end
     set.Counts[side] += 1
+    -- Order only grows, so a box made after another was destroyed still goes below the rest.
+    set.Order = (set.Order or 0) + 1
 
     local box = create("Frame", {
         Size = UDim2.new(1, 0, 0, 0),
         AutomaticSize = Enum.AutomaticSize.Y,
         BackgroundColor3 = Theme.Surface2,
         BorderSizePixel = 0,
-        LayoutOrder = set.Counts[side],
+        LayoutOrder = set.Order,
         Parent = side == 1 and set.Left or set.Right,
     })
     box:SetAttribute("NoDrag", true)
@@ -1339,6 +1353,7 @@ function Tab:Tabbox(opts)
             end
             tabbox.Current._userVisible = visible
         end
+        box:SetAttribute("Revealing", nil)
         box.Visible = visible
         window._controlsDirty = true
     end
@@ -1346,6 +1361,9 @@ function Tab:Tabbox(opts)
         box.Visible = false
     end
     function tabbox:Destroy()
+        if tabbox._destroyed then
+            return
+        end
         for index = #tabbox.Tabs, 1, -1 do
             tabbox.Tabs[index]:Destroy()
         end

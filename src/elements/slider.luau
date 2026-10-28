@@ -11,17 +11,31 @@ function Tab:Slider(opts)
 
     local metrics = metricsOf(self)
     local compact = metrics.Compact
-    local height = metrics.Slider
+    -- Desc adds a muted line under the name; the track moves down with it.
+    local descHeight = opts.Desc and (metrics.DescLine + 2) or 0
+    local height = metrics.Slider + descHeight
     local frame, frameStroke = card(self, "Frame", height, opts)
     hoverStroke(frame, frameStroke)
 
+    local titleTop = compact and 5 or 12
     label({
-        Position = UDim2.fromOffset(14, compact and 5 or 12),
+        Position = UDim2.fromOffset(14, titleTop),
         Size = UDim2.new(1, -120, 0, 18),
         Text = opts.Name or "Slider",
         TextSize = metrics.TextSize,
         Parent = frame,
     })
+    if opts.Desc then
+        label({
+            Position = UDim2.fromOffset(14, titleTop + 19),
+            Size = UDim2.new(1, -120, 0, metrics.DescLine),
+            Text = opts.Desc,
+            TextSize = metrics.DescSize,
+            FontFace = Fonts.Regular,
+            TextColor3 = Theme.Muted,
+            Parent = frame,
+        })
+    end
 
     local valueChip = create("Frame", {
         AnchorPoint = Vector2.new(1, 0),
@@ -150,7 +164,7 @@ function Tab:Slider(opts)
         Parent = frame,
     })
 
-    local self_ = { Value = math.clamp(opts.Default or min, min, max) }
+    local self_ = { Value = math.clamp(tonumber(opts.Default) or min, min, max), Dragging = false }
     local dragging = false
     chipButton.MouseEnter:Connect(function()
         tween(chipStroke, { Color = Theme.StrokeHover }, 0.12)
@@ -173,6 +187,10 @@ function Tab:Slider(opts)
     end)
     valueBox.FocusLost:Connect(function()
         local typed = tonumber(valueBox.Text)
+        -- "nan" and "inf" parse as numbers but aren't values: the old one stays.
+        if typed and (typed ~= typed or math.abs(typed) == math.huge) then
+            typed = nil
+        end
         editing = false
         valueBox.Visible = false
         suffixLabel.Visible = false
@@ -295,6 +313,10 @@ function Tab:Slider(opts)
     self_._onHide = function()
         if dragging then
             endDrag()
+        end
+        -- Typing in the value chip ends too, so a hidden or disabled slider can't change.
+        if valueBox:IsFocused() then
+            valueBox:ReleaseFocus()
         end
     end
 

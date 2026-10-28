@@ -56,7 +56,7 @@ function Tab:Progress(opts)
     })
     corner(fill, UDim.new(1, 0))
 
-    local self_ = { Value = math.clamp(opts.Default or 0, 0, 1) }
+    local self_ = { Value = math.clamp(tonumber(opts.Default) or 0, 0, 1) }
     local formatter = opts.Format
     local function render(duration)
         local frac = self_.Value

@@ -133,6 +133,7 @@ function Library._setDependHidden(element, hidden)
     end
     local frame = element._frame
     if frame then
+        frame:SetAttribute("Revealing", nil)
         frame.Visible = element._userVisible ~= false and not hidden
     end
     if element._window then
@@ -306,7 +307,7 @@ function Library._gateButton(tab, opts)
             fill.Size = UDim2.fromScale(0, 1)
             tween(fill, { Size = UDim2.fromScale(1, 1) }, holdTime, Enum.EasingStyle.Linear)
             task.delay(holdTime, function()
-                if holding == current and not handle._destroyed then
+                if holding == current and not handle._destroyed and not handle.Disabled and not handle._dependDisabled then
                     holding += 1
                     tween(fill, { BackgroundTransparency = 0.45 }, 0.08)
                     task.delay(0.12, function()
@@ -323,6 +324,14 @@ function Library._gateButton(tab, opts)
             end
         end)
         frame.MouseLeave:Connect(release)
+        -- Hidden or disabled mid-hold: the hold is dropped.
+        local hideBefore = handle._onHide
+        handle._onHide = function()
+            release()
+            if hideBefore then
+                hideBefore()
+            end
+        end
     end
     return handle
 end
@@ -428,6 +437,7 @@ function Library:SetTheme(theme, instant)
     if type(theme) == "string" then
         local found = Library.ThemePresets[theme]
         if not found then
+            Library._warn(('SetTheme: no preset called "%s". Use a preset name such as "KaitUI" or "Midnight", or a table of colours.'):format(theme))
             return false
         end
         Library.ThemeName = theme
@@ -546,7 +556,10 @@ function Window:DeleteTheme(name)
     if not isfile(path) then
         return false, "no theme named " .. tostring(name)
     end
-    delfile(path)
+    local ok, err = pcall(delfile, path)
+    if not ok then
+        return false, tostring(err)
+    end
     if self:GetDefaultTheme() == name then
         self:SetDefaultTheme(nil)
     end
@@ -564,7 +577,10 @@ function Window:ListThemes()
             table.insert(names, name)
         end
     end
-    table.sort(names)
+    -- Same order as ListConfigs: case doesn't decide it.
+    table.sort(names, function(a, b)
+        return string.lower(a) < string.lower(b)
+    end)
     return names
 end
 

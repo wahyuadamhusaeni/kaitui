@@ -211,6 +211,9 @@ function Window:_homeProfile(list, opts, order)
             expiryText.Text = left > 0 and (formatDuration(left) .. " left") or "Expired"
         elseif value ~= nil then
             expiryText.Text = tostring(value)
+        else
+            -- A function that stops returning a value hides the chip.
+            expiryText.Text = ""
         end
         expiryChip.Visible = expiryText.Text ~= ""
     end
@@ -291,9 +294,9 @@ function Window:_homeGraph(parent, order, icon, title, ceiling, unit)
             Parent = columns,
         })
     end
-    local muted = "#" .. Theme.Muted:ToHex()
+    -- The unit's colour is read each time, so it follows a theme change.
     local function setValue(sample)
-        value.Text = ('%d<font size="13" color="%s"> %s</font>'):format(sample, muted, unit or "")
+        value.Text = ('%d<font size="13" color="#%s"> %s</font>'):format(sample, Theme.Muted:ToHex(), unit or "")
     end
     local function push(sample, color)
         setValue(sample)
@@ -1482,6 +1485,13 @@ local function homePage(sub, page)
 end
 
 function Window:_buildHome(opts)
+    Library._validate("CreateWindow.Home", opts, {
+        Name = "string", Desc = "string", Title = "string", Welcome = "string", Tier = "string|boolean", TierIcon = "string|number|table",
+        Expiry = "number|string|function", Stats = "table", StatColors = "boolean", StatsFolder = "string", TimeFormat = "string",
+        SupportedExecutors = "table", Discord = "string", Website = "string", DiscordTitle = "string", WebsiteTitle = "string",
+        Links = "table", HideName = "boolean", HideAvatar = "boolean", Features = "table|boolean", OverviewName = "string",
+        TabIcon = "string|number|table", Pages = "table",
+    })
     self._hideName = opts.HideName == true
     self._hideAvatar = opts.HideAvatar == true
     self:_renderIdentity(true)

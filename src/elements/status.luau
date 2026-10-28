@@ -357,6 +357,10 @@ function Tab:Status(opts)
     end
 
     render(false)
+    -- Wrapping only applies to the Plain style; elsewhere SetWrap is a no-op, not an error.
+    if not handle.SetWrap then
+        function handle:SetWrap() end
+    end
     return finishElement(self, opts, handle, frame, "Status")
 end
 

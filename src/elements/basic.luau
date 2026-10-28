@@ -2,6 +2,11 @@ local Tab = {}
 Tab.__index = Tab
 
 function Tab:_nextOrder()
+    -- A tab with sub tabs hides its own list: what's added straight to it never shows.
+    if rawget(self, "_sub") and not rawget(self, "_warnedSub") then
+        rawset(self, "_warnedSub", true)
+        Library._warn(('Tab "%s" has sub tabs, so things added to the tab itself are hidden. Add them to a sub tab instead (local Page = Tab:CreateSubTab({ Name = "..." })).'):format(tostring(self.Name)))
+    end
     self._order = self._order + 1
     return self._order
 end
@@ -11,6 +16,7 @@ function Tab:Section(text)
     if type(text) == "table" then
         text = text.Name or text.Title or ""
     end
+    text = tostring(text == nil and "" or text)
     local inset = metricsOf(self).Compact and 14 or 2
     local holder = create("Frame", {
         Size = UDim2.new(1, 0, 0, 28),
@@ -44,7 +50,7 @@ function Tab:Section(text)
     task.defer(fitRule)
     return finishElement(self, { Visible = visible }, {
         Set = function(_, value)
-            text_.Text = string.upper(value)
+            text_.Text = string.upper(tostring(value == nil and "" or value))
         end,
     }, holder, "Section")
 end
@@ -140,12 +146,22 @@ function Tab:Label(opts)
     else
         padding(text_, 2, 2)
     end
+    -- The text as given is kept: Get returns it, and theme tags in it are
+    -- redrawn in the new colours when the theme changes.
+    local raw = tostring(opts.Text or "")
+    local function show(value)
+        raw = tostring(value == nil and "" or value)
+        text_.Text = Library._rich(raw)
+    end
+    onTheme(text_, function()
+        text_.Text = Library._rich(raw)
+    end)
     local handle = {
         Set = function(_, value)
-            text_.Text = Library._rich(value)
+            show(value)
         end,
         Get = function()
-            return text_.Text
+            return raw
         end,
         SetColor = function(_, color)
             tween(text_, { TextColor3 = Library._color(color) or Theme.Text }, 0.25)
@@ -166,10 +182,9 @@ function Tab:Label(opts)
                 if not window or (window.Open and not window.Minimized) then
                     local ok, value = isolatedCall(opts.Update)
                     if ok and value ~= nil then
-                        local text = Library._rich(value)
                         -- Same text: no write, so no rich-text relayout.
-                        if text_.Text ~= text then
-                            text_.Text = text
+                        if tostring(value) ~= raw then
+                            show(value)
                         end
                     elseif not ok and not warned then
                         warned = true
@@ -220,9 +235,17 @@ function Tab:Paragraph(opts)
         LayoutOrder = 2,
         Parent = frame,
     })
+    local raw = tostring(opts.Content or "")
+    onTheme(content, function()
+        content.Text = Library._rich(raw)
+    end)
     return finishElement(self, opts, {
         Set = function(_, value)
-            content.Text = Library._rich(value)
+            raw = tostring(value == nil and "" or value)
+            content.Text = Library._rich(raw)
+        end,
+        Get = function()
+            return raw
         end,
     }, frame, "Paragraph")
 end
@@ -313,8 +336,10 @@ local function rowButton(tab, opts)
         _titleColor = textColor,
         _fillHost = box,
         SetText = function(_, value)
-            title.Text = value
+            title.Text = tostring(value == nil and "" or value)
         end,
+        -- Only Confirm / HoldToConfirm buttons arm; on others Disarm does nothing.
+        Disarm = function() end,
     }, button, "Button")
 end
 
@@ -382,8 +407,10 @@ function Tab:Button(opts)
         _titleColor = textColor,
         _fillHost = button,
         SetText = function(_, value)
-            title.Text = value
+            title.Text = tostring(value == nil and "" or value)
         end,
+        -- Only Confirm / HoldToConfirm buttons arm; on others Disarm does nothing.
+        Disarm = function() end,
     }, button, "Button")
 end
 

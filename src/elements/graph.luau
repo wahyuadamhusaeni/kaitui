@@ -323,6 +323,7 @@ function Tab:Graph(opts)
         while #values > maxPoints do
             table.remove(values, 1)
         end
+        handle.Value = value
         schedule()
     end
     handle.Set = handle.Push
@@ -344,11 +345,13 @@ function Tab:Graph(opts)
             table.remove(nextValues, 1)
         end
         values = nextValues
+        handle.Value = values[#values]
         schedule()
     end
 
     function handle:Clear()
         values = {}
+        handle.Value = nil
         schedule()
     end
 

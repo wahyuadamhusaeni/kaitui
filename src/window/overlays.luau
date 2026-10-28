@@ -38,6 +38,7 @@ end
 function Window:_setupOverlay(handle, frame, slot)
     local gui = self.Gui
     handle._listeners = handle._listeners or {}
+    handle._frameObject = frame
     handle._scale = create("UIScale", { Scale = self._uiScale or 1, Parent = frame })
 
     local dragging = false

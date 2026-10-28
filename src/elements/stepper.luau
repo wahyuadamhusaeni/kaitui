@@ -143,6 +143,10 @@ function Tab:Stepper(opts)
     end
     holdRepeat(minus, -1)
     holdRepeat(plus, 1)
+    -- Hidden, collapsed or disabled mid-hold: the repeat stops.
+    self_._onHide = function()
+        holdGeneration += 1
+    end
 
     render()
     task.defer(fitValue, true)

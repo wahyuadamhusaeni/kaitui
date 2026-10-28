@@ -64,10 +64,12 @@ Window:LoadAutoload()                      -- apply the player's autoload config
 ## Rules that prevent most mistakes
 
 - Constructors exist with and without the `Create` prefix: `Tab:CreateToggle` and `Tab:Toggle` are the same. Pick one style per script.
+- Script mistakes print a `[KaitUI] ...` warning naming the element, option, expected type and value received, and the window keeps working (wrong options are converted or ignored). After writing a script, check the console for `[KaitUI]` lines and fix each one; a clean script prints none. Window and tab methods need a colon (`Window:CreateTab`); element handles accept a dot or a colon.
 - Options are a single table. Legacy names are accepted (`Title` for `Name`, `Description` for `Desc`, `CurrentValue` / `Default` / `Value` for the start value, `MultipleOptions` / `Multi`), but prefer the names in this file.
 - Once a tab has sub tabs (`Tab:CreateSubTab({ Name = "Page" })`), add groupboxes and elements to the sub tabs, not the tab.
 - Elements added straight to a tab are full-width cards; elements in a groupbox are compact rows. Groupboxes are the normal choice.
 - `Flag` strings must be unique across the whole script. Toggles, sliders, steppers, segmented pickers, dropdowns, player pickers, order lists, inputs, textareas, keybinds and colour pickers take flags. Labels, buttons, statuses, graphs and tables do not (editable tables do).
+- Closing the window (the × or `Window:Destroy()`) switches every toggle off so feature loops stop; give setting toggles `KeepOnClose = true`. `OnClose` runs once just before.
 - Flagged toggles that are on count as "running" on the minimized island. Don't flag a toggle that is only a setting if that would mislead; a setting is still fine to flag.
 - `Set(value, true)` skips the callback. Use it when syncing UI from code.
 - `Update` functions may yield (`InvokeServer`, `task.wait`); they run on their own thread. Element callbacks run inline and errors are caught and warned, so keep them quick and wrap long loops in `task.spawn`. Library calls made from a thread that yielded in an engine call are made safe automatically.
@@ -89,7 +91,7 @@ Every element takes `Name`, `Desc` (a muted hint under the name), `Tooltip` (a s
 | `Toggle` | `CurrentValue`, `Flag`, `Callback(bool)` | `.Value`, `Set`, `Get` |
 | `Slider` | `Range = { min, max }`, `Increment`, `Suffix`, `CurrentValue`, `Flag`, `Callback(n)`, `OnRelease(n)` | `.Value`, `.Dragging`, `Set`, `Get` |
 | `Stepper` | `Range`, `Increment`, `Suffix`, `CurrentValue`, `Flag`, `Callback(n)` | `.Value`, `Set`, `Get` |
-| `Segmented` | `Options` (2 to 5 strings), `CurrentOption` (text or index), `Stacked`, `Flag`, `Callback(option)` | `.Value`, `Set(textOrIndex)`, `Get`, `SetOptions(list, skipCallback?)`, `GetOptions` |
+| `Segmented` | `Options` (2 to 5 read best; numbers come back as numbers), `CurrentOption` (value or index), `Stacked`, `Flag`, `Callback(option)` | `.Value`, `Set(textOrIndex)`, `Get`, `SetOptions(list, skipCallback?)`, `GetOptions` |
 | `Dropdown` | `Options`, `CurrentOption`, `MultipleOptions`, `AllowNone`, `Searchable`, `MaxRows`, `NoneText`, `Stacked`, `OptionIcon(option)` (image before each row), `Flag`, `Callback(value or list)` | `Set`, `Get`, `SetOptions(options, { KeepSelection = true, Silent = false })`, `GetOptions`, `Refresh(options, keepSelection?, skipCallback?)`, `SetOpen`, `.Open` |
 | `PlayerPicker` | `Multi`, `IncludeSelf`, `Display` (`"Both"`, `"DisplayName"`, `"Name"`), `Avatars` (default true), `Flag` (saves names), `Callback(Player or list of Players)` | `Get` (Players still in game), `GetName` / `GetNames`, `Set(playerOrName or list)`, `Refresh`, `GetOptions` |
 | `OrderList` | `Items`, `MaxRows`, `Numbered`, `Arrows`, `Flag`, `Callback(order)` | `.Value`, `Set(order)`, `Refresh(items)`, `Get` |

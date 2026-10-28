@@ -18,8 +18,28 @@ end
 
 function Library.Window(_, opts)
     opts = normalize(opts, { Name = "Title", LoadingSubtitle = "Subtitle", ToggleUIKeybind = "Keybind" })
+    Library._validate("CreateWindow", opts, {
+        Title = "string", Subtitle = "string", Size = "UDim2", MinSize = "Vector2", MaxSize = "Vector2",
+        UIScale = "number", SidebarWidth = "number", CornerRadius = "number", BackgroundTransparency = "number",
+        MaxNotifications = "number", LoadingDuration = "number", Density = "string", DragStyle = "string",
+        IslandStyle = "string", Theme = "string|table", DefaultTheme = "string|table", Background = "string|number",
+        ConfigurationSaving = "table", Home = "table|boolean", Profile = "table|boolean", Backdrop = "table|boolean",
+        Loading = "table|boolean", ToggleButton = "table|boolean", OpenButton = "table|boolean", Disclaimer = "table|string",
+        Search = "boolean", AdaptiveSize = "boolean", Transparent = "boolean", KeepOnScreen = "boolean",
+        IslandDraggable = "boolean", CloseButton = "boolean", CloseConfirm = "boolean", OnClose = "function",
+        PerformanceMode = "boolean|string", Version = "string",
+    })
+    if type(opts.ConfigurationSaving) == "table" then
+        Library._validate("CreateWindow.ConfigurationSaving", opts.ConfigurationSaving, { FolderName = "string", Enabled = "boolean" })
+    end
 
+    local keyName_ = opts.Keybind
+    -- false or "None" means no hide key, as SetKeybind(false) does.
+    local noKey = keyName_ == false or keyName_ == "None"
     opts.Keybind = Library._keyCode(opts.Keybind)
+    if keyName_ ~= nil and not noKey and opts.Keybind == nil then
+        Library._warn(("CreateWindow: ToggleUIKeybind %s is not a key. Use a KeyCode name such as \"RightControl\" or \"K\"; RightControl is used."):format(Library._describe(keyName_)))
+    end
     if opts.PerformanceMode == true then
         Library:SetPerformanceMode(true)
     elseif opts.PerformanceMode == "Auto" and TOUCH and not Library.PerformanceMode then
@@ -38,7 +58,20 @@ function Library.Window(_, opts)
         end)
     end
     local size = opts.Size or UDim2.fromOffset(760, 520)
-    local keybind = opts.Keybind or Enum.KeyCode.RightControl
+    -- The window works in pixels: a scale Size becomes pixels of the screen it
+    -- opens on, and the start size respects MinSize / MaxSize.
+    do
+        local camera = workspace.CurrentCamera
+        local view = camera and camera.ViewportSize or Vector2.new(1280, 720)
+        local width = size.X.Scale * view.X + size.X.Offset
+        local height = size.Y.Scale * view.Y + size.Y.Offset
+        local minSize = opts.MinSize or Vector2.new(480, 360)
+        local maxSize = opts.MaxSize or Vector2.new(math.huge, math.huge)
+        width = math.clamp(width, minSize.X, math.max(maxSize.X, minSize.X))
+        height = math.clamp(height, minSize.Y, math.max(maxSize.Y, minSize.Y))
+        size = UDim2.fromOffset(math.floor(width + 0.5), math.floor(height + 0.5))
+    end
+    local keybind = opts.Keybind or (not noKey and Enum.KeyCode.RightControl or nil)
 
     local self = setmetatable({
         Tabs = {},
@@ -91,9 +124,16 @@ function Library.Window(_, opts)
     if opts.CornerRadius ~= nil then
         Library:SetCornerRadius(opts.CornerRadius, true)
     end
+    -- Input handlers run over a copy: one that destroys an element (and so
+    -- removes listeners) mustn't make the next handler for the same input skip.
+    -- Render runs every frame, so it walks the list itself; removals there are deferred.
     local function dispatch(kind)
         return function(...)
-            for _, handler in ipairs(self._inputListeners[kind]) do
+            local list = self._inputListeners[kind]
+            if kind ~= "Render" then
+                list = table.clone(list)
+            end
+            for _, handler in ipairs(list) do
                 handler(...)
             end
         end
@@ -656,7 +696,12 @@ function Library:Notify(opts)
     if window then
         return window:Notify(opts)
     end
-    -- No window yet: an inert handle, so scripts that call Dismiss or SetProgress don't error.
+    return Library._inertToast()
+end
+
+-- What Notify returns when there is no window to show it in: every method is
+-- there and does nothing, so scripts that call Dismiss or SetProgress don't error.
+function Library._inertToast()
     local function none() end
     return {
         Dismiss = none,

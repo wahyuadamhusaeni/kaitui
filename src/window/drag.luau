@@ -116,6 +116,19 @@ function Window:_enableDrag()
         if not pointInside(point, self.Body) or self:_overControl(point) then
             return
         end
+        -- Floating things drawn above the window (overlays, the toggle and open
+        -- buttons) are dragged or clicked on their own, not the window.
+        -- (`or false` keeps the list free of holes, which would stop ipairs.)
+        for _, floating in ipairs({
+            self._watermark and self._watermark._frameObject or false,
+            self._keybindList and self._keybindList._frameObject or false,
+            self.ToggleButton or false,
+            self.OpenButton or false,
+        }) do
+            if floating and floating.Parent and floating.Visible and pointInside(point, floating) then
+                return
+            end
+        end
         if self._clampTween then
             self._clampTween:Cancel()
             self._clampTween = nil

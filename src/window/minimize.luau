@@ -570,14 +570,15 @@ function Window:_buildMiniBar()
     -- the screen so it keeps its spot across resolutions. Dragging moves it;
     -- each shape is clamped on screen, so the wide card slides in from an edge
     -- and the pill goes back to its spot when it folds.
+    -- A locked island (IslandDraggable = false) stays at the top centre, whatever was saved.
     local saved = self:_readConfigSettings().IslandPosition
-    if type(saved) == "table" and tonumber(saved.X) and tonumber(saved.Y) then
+    if not self._islandLocked and type(saved) == "table" and tonumber(saved.X) and tonumber(saved.Y) then
         self._islandAnchor = Vector2.new(math.clamp(tonumber(saved.X), 0, 1), math.clamp(tonumber(saved.Y), 0, 1))
     end
     local positionTween
     local function anchorPixels()
         local view = gui.AbsoluteSize
-        local anchor = self._islandAnchor
+        local anchor = not self._islandLocked and self._islandAnchor or nil
         if not anchor then
             return Vector2.new(view.X / 2, Mini.Top)
         end
@@ -1152,7 +1153,11 @@ function Window:_buildMiniBar()
 end
 
 function Window:Minimize()
-    if self.Minimized or not self._introDone or not self.Open or self._destroyed then
+    if not self._introDone and not self._destroyed then
+        self._pendingShow = "minimized"
+        return
+    end
+    if self.Minimized or not self.Open or self._destroyed then
         return
     end
     self.Minimized = true
@@ -1226,6 +1231,10 @@ function Window:Minimize()
 end
 
 function Window:Restore()
+    if not self._introDone then
+        self._pendingShow = nil
+        return
+    end
     if not self.Minimized or self._destroyed then
         return
     end
@@ -1315,7 +1324,9 @@ function Window:SetMinimized(minimized)
 end
 
 function Window:Toggle(open)
+    -- During the loader the request is kept and applied when the window appears.
     if not self._introDone then
+        self._pendingShow = (open == true) and "open" or (open == false and "hidden" or (self._pendingShow == "hidden" and "open" or "hidden"))
         return
     end
     if self.Minimized then

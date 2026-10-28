@@ -172,7 +172,16 @@ function Tab:ColorPicker(opts)
     })
 
     local self_ = { Open = false }
-    local hue, sat, val = Color3.toHSV(opts.Default or Theme.Accent)
+    -- Any colour form the library knows: Color3, "#rrggbb", a theme key or { r, g, b }.
+    local function asColor(value, what)
+        local color = Library._color(value)
+        if value ~= nil and not color then
+            Library._warn(('ColorPicker "%s": %s should be a Color3, "#rrggbb", a theme key or { r, g, b }, got %s. It was ignored.'):format(
+                tostring(opts.Name or "Color"), what, Library._describe(value)))
+        end
+        return color
+    end
+    local hue, sat, val = Color3.toHSV(asColor(opts.Default, "Color") or Theme.Accent)
     local dragTarget = nil
 
     local function toHex(color)
@@ -210,6 +219,10 @@ function Tab:ColorPicker(opts)
     end
 
     function self_:Set(color, silent)
+        color = asColor(color, "Set")
+        if not color then
+            return
+        end
         hue, sat, val = Color3.toHSV(color)
         commit(0.25, silent)
         flashStroke(frameStroke)
@@ -301,7 +314,11 @@ function Tab:ColorPicker(opts)
         tween(hexStroke, { Color = Theme.Stroke }, 0.15)
         local r, g, b = hexBox.Text:match("^%s*#?(%x%x)(%x%x)(%x%x)%s*$")
         if r then
-            self_:Set(Color3.fromRGB(tonumber(r, 16), tonumber(g, 16), tonumber(b, 16)))
+            -- Focusing the box and leaving it as it was is not a change.
+            local color = Color3.fromRGB(tonumber(r, 16), tonumber(g, 16), tonumber(b, 16))
+            if toHex(color) ~= toHex(self_.Value) then
+                self_:Set(color)
+            end
         else
             hexBox.Text = toHex(self_.Value)
         end

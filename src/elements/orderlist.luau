@@ -171,9 +171,21 @@ function Tab:OrderList(opts)
         end
     end
 
+    -- The callback runs only when the order really changed.
     local function changed(silent)
-        self_.Value = values()
-        if not silent then
+        local before = self_.Value
+        local now = values()
+        self_.Value = now
+        local same = type(before) == "table" and #before == #now
+        if same then
+            for index, value in ipairs(now) do
+                if before[index] ~= value then
+                    same = false
+                    break
+                end
+            end
+        end
+        if not silent and not same then
             safeCall(opts.Callback, values())
         end
     end
@@ -520,19 +532,30 @@ function Tab:OrderList(opts)
         changed(silent)
     end
 
-    -- The shown order, then remembered items that aren't in the list right now.
+    -- The remembered order with the shown items in the order the player has
+    -- them now: items that aren't in the list keep their remembered place.
     function self_:_saveValue()
-        local list = values()
+        local shown = values()
+        if #remembered == 0 then
+            return shown
+        end
         local left = {}
-        for _, value in ipairs(list) do
+        for _, value in ipairs(shown) do
             left[value] = (left[value] or 0) + 1
         end
+        local list, next_ = {}, 1
         for _, value in ipairs(remembered) do
             if (left[value] or 0) > 0 then
+                -- A shown item's slot takes the next shown item, in the current order.
                 left[value] -= 1
+                table.insert(list, shown[next_])
+                next_ += 1
             else
                 table.insert(list, value)
             end
+        end
+        for index = next_, #shown do
+            table.insert(list, shown[index])
         end
         return list
     end

@@ -27,15 +27,20 @@ local function orderedChildren(parent)
     return children
 end
 
+-- The reveal hides each card for a moment and marks it; showing or hiding an
+-- element from a script (SetVisible, DependsOn) clears the mark, so a card the
+-- script hid during the reveal stays hidden.
 local function popIn(object, delay, force)
     if not object.Visible and not force then
         return
     end
     object.Visible = false
+    object:SetAttribute("Revealing", true)
     task.delay(delay, function()
-        if not object.Parent then
+        if not object.Parent or not object:GetAttribute("Revealing") then
             return
         end
+        object:SetAttribute("Revealing", nil)
         local scaleObject = create("UIScale", { Scale = 0.94, Parent = object })
         object.Visible = true
         tween(scaleObject, { Scale = 1 }, 0.4, Enum.EasingStyle.Back)
@@ -90,9 +95,21 @@ function Window:_playIntro(morph)
             self:_buildMiniBar()
         end
     end)
-    -- "Minimize UI on Start": fold into the island once, right after the
-    -- first intro of this execution.
-    if self:GetMinimizeOnStart() then
+    -- Toggle or Minimize called while the loader ran: applied now.
+    local pending = self._pendingShow
+    self._pendingShow = nil
+    if pending == "hidden" or pending == "minimized" then
+        task.delay(0.6, function()
+            if self._destroyed or not self.Open or self.Minimized then
+                return
+            end
+            if pending == "hidden" then
+                self:Toggle(false)
+            else
+                self:Minimize()
+            end
+        end)
+    elseif self:GetMinimizeOnStart() then
         task.delay(0.6, function()
             if not self._destroyed and self.Open and not self.Minimized then
                 self:Minimize()
@@ -593,7 +610,8 @@ function Window:_showLoader(opts)
                 callback()
             end)
         end
-        if info.ExitText ~= false then
+        -- A blocking card always keeps Exit, or it would have no button at all.
+        if info.ExitText ~= false or info.Block then
             button(info.ExitText or "Exit", info.Block, 1, function()
                 if info.Callback then
                     task.spawn(info.Callback, false)

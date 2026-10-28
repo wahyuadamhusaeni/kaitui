@@ -42,6 +42,15 @@ function Tab:ButtonRow(opts)
             entry.Label.Text = tostring(text)
         end
     end
-    return finishElement(self, { Name = table.concat(names, " "), Visible = not (type(opts) == "table" and opts.Visible == false) }, handle, frame, "ButtonRow")
+    -- The row takes the options every element takes, next to its list of buttons.
+    local shared = type(opts) == "table" and opts or {}
+    return finishElement(self, {
+        Name = table.concat(names, " "),
+        Visible = shared.Visible ~= false,
+        Disabled = shared.Disabled,
+        DependsOn = shared.DependsOn,
+        DependsMode = shared.DependsMode,
+        Tooltip = shared.Tooltip,
+    }, handle, frame, "ButtonRow")
 end
 

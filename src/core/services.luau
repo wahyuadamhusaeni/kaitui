@@ -15,23 +15,95 @@ local Library = {}
 Library.Flags = {}
 Library.Windows = {}
 
+-- Script mistakes get a clear warning instead of an error deep in the library:
+-- each option in `schema` ("string", "number", "function", "table", "boolean",
+-- a Roblox type such as "UDim2", or several joined by "|") is checked, simple
+-- mix-ups are converted (12 -> "12" for text, "12" -> 12 for numbers), and
+-- anything else is dropped so the default applies. One warning per mistake.
+Library._warned = {}
+function Library._warn(message)
+    if Library._warned[message] then
+        return
+    end
+    Library._warned[message] = true
+    warn("[KaitUI] " .. message)
+end
+function Library._describe(value)
+    local kind = typeof(value)
+    if kind == "string" then
+        return 'string "' .. (#value > 30 and value:sub(1, 30) .. "..." or value) .. '"'
+    elseif kind == "number" or kind == "boolean" then
+        return kind .. " " .. tostring(value)
+    end
+    return kind
+end
+function Library._validate(where, opts, schema)
+    for key, expected in pairs(schema) do
+        local value = opts[key]
+        if value ~= nil then
+            local kind = typeof(value)
+            local ok = false
+            for wanted in string.gmatch(expected, "[^|]+") do
+                if kind == wanted then
+                    ok = true
+                    break
+                end
+            end
+            if not ok then
+                local fixed = nil
+                if string.find(expected, "string", 1, true) and kind == "number" then
+                    fixed = tostring(value)
+                elseif string.find(expected, "number", 1, true) and kind == "string" then
+                    fixed = tonumber(value)
+                end
+                if fixed ~= nil then
+                    opts[key] = fixed
+                else
+                    opts[key] = nil
+                    Library._warn(("%s: %s should be a %s, got %s. It was ignored."):format(
+                        where, key, (expected:gsub("|", " or ")), Library._describe(value)))
+                end
+            end
+        end
+    end
+    return opts
+end
+
+-- Options most elements share. Element-specific ones are checked by the element.
+local COMMON_OPTIONS = {
+    Name = "string", Desc = "string", Flag = "string", Suffix = "string", Prefix = "string", Placeholder = "string",
+    Callback = "function", OnChanged = "function", OnRelease = "function", Update = "function", Format = "function",
+    Options = "table", Range = "table", Columns = "table", Rows = "table", Items = "table",
+    Min = "number", Max = "number", Step = "number", UpdateRate = "number", MaxRows = "number", Lines = "number",
+    MaxLength = "number", Height = "number", Points = "number", Decimals = "number",
+    Tooltip = "string|table|boolean", Icon = "string|number|table|boolean", DependsOn = "string|table|function",
+}
+
 local function normalize(source, map)
     local opts = {}
-    if type(source) == "string" then
-        opts.Name = source
+    if type(source) == "string" or type(source) == "number" then
+        opts.Name = tostring(source)
     elseif type(source) == "table" then
         for key, value in pairs(source) do
             opts[key] = value
         end
+    elseif source ~= nil then
+        Library._warn("Options should be a table such as { Name = \"...\" }, got " .. Library._describe(source) .. ".")
     end
     for from, to in pairs(map or {}) do
         if opts[to] == nil and opts[from] ~= nil then
             opts[to] = opts[from]
         end
     end
+    local where = type(opts.Name) == "string" and ('"' .. opts.Name .. '"') or type(opts.Title) == "string" and ('"' .. opts.Title .. '"') or "An element"
+    Library._validate(where, opts, COMMON_OPTIONS)
     if opts.Range then
-        opts.Min = opts.Min or opts.Range[1]
-        opts.Max = opts.Max or opts.Range[2]
+        local low, high = tonumber(opts.Range[1]), tonumber(opts.Range[2])
+        if low == nil or high == nil then
+            Library._warn(where .. ": Range should be { min, max } with two numbers. It was ignored.")
+        end
+        opts.Min = opts.Min or low
+        opts.Max = opts.Max or high
     end
     -- A reversed range would make every math.clamp(value, Min, Max) throw.
     if type(opts.Min) == "number" and type(opts.Max) == "number" and opts.Min > opts.Max then
@@ -46,8 +118,11 @@ function Library._pageShown(page)
     if page == nil then
         return true
     end
-    if page.Tabbox then
-        return page.Tabbox._userVisible ~= false
+    -- rawget: on ordinary tabs and groupboxes `Tabbox` resolves to the
+    -- Tab:Tabbox method through the metatable, not to a tabbox.
+    local tabbox = rawget(page, "Tabbox")
+    if type(tabbox) == "table" then
+        return tabbox._userVisible ~= false
     end
     return page._userVisible ~= false
 end
@@ -64,14 +139,31 @@ local function finishElement(tab, opts, element, frame, kind)
     if tab and tab._items then
         table.insert(tab._items, element)
     end
+    -- Callback errors name the element they came from (see safeCall).
+    for _, key in ipairs({ "Callback", "OnChanged", "OnRelease" }) do
+        local callback = opts[key]
+        if type(callback) == "function" then
+            opts[key] = function(...)
+                Library._callbackOwner = searchText or kind
+                return callback(...)
+            end
+        end
+    end
     if opts.Flag then
+        local owner = Library.Flags[opts.Flag]
+        if owner and owner ~= element and not owner._destroyed then
+            Library._warn(('Flag "%s" is used by two elements (%s and %s). The newer one now owns it, so configs only save that one: give every element its own Flag.'):format(
+                opts.Flag, tostring(owner._searchName or owner._type), tostring(searchText or kind)))
+        end
         Library.Flags[opts.Flag] = element
         if window then
             window:_flagCreated(opts.Flag, element)
         end
     end
-    -- Every toggle, flagged or not, so Window:Destroy can switch them all off.
-    if window and kind == "Toggle" then
+    -- Every toggle, flagged or not, so Window:Destroy can switch them off; not the
+    -- library's own settings (config/theme manager boxes) or KeepOnClose ones,
+    -- whose callbacks would otherwise clear the autoload or Performance Mode.
+    if window and kind == "Toggle" and opts.KeepOnClose ~= true and not (tab and rawget(tab, "_manager")) then
         window._toggles = window._toggles or {}
         table.insert(window._toggles, element)
     end
@@ -97,6 +189,7 @@ local function finishElement(tab, opts, element, frame, kind)
             end
         end
         if frame then
+            frame:SetAttribute("Revealing", nil)
             frame.Visible = visible and not element._dependHidden
         end
         if window then
@@ -149,6 +242,10 @@ local function finishElement(tab, opts, element, frame, kind)
     function element:Destroy()
         if element._destroyed then
             return
+        end
+        -- Drags, holds and text editing end first (OnRelease fires, focus is released).
+        if type(element._onHide) == "function" then
+            pcall(element._onHide)
         end
         element._destroyed = true
         if window and window._toggles then
@@ -251,7 +348,7 @@ Library.ThemePresets = {
     KaitUI = preset({ 9, 15, 18 }, { 12, 19, 23 }, { 15, 24, 29 }, { 28, 43, 49 }, { 25, 39, 45 }, { 50, 90, 96 }, { 45, 212, 191 }, { 5, 26, 23 }, { 226, 242, 240 }, { 104, 136, 138 }),
     Midnight = preset({ 15, 18, 26 }, { 18, 22, 31 }, { 22, 26, 37 }, { 37, 44, 60 }, { 34, 40, 55 }, { 70, 84, 112 }, { 128, 160, 246 }, { 14, 18, 30 }, { 228, 232, 242 }, { 116, 126, 148 }),
     Ocean = preset({ 12, 20, 24 }, { 15, 24, 29 }, { 18, 29, 35 }, { 31, 48, 56 }, { 29, 44, 52 }, { 58, 92, 104 }, { 110, 214, 222 }, { 10, 24, 28 }, { 226, 238, 240 }, { 108, 134, 140 }),
-    Rose = preset({ 21, 21, 21 }, { 26, 26, 26 }, { 31, 31, 31 }, { 48, 48, 48 }, { 44, 44, 44 }, { 92, 116, 50 }, { 183, 243, 74 }, { 21, 21, 21 }, { 243, 243, 238 }, { 134, 134, 128 }),
+    Rose = preset({ 21, 21, 21 }, { 26, 26, 26 }, { 31, 31, 31 }, { 48, 48, 48 }, { 44, 44, 44 }, { 92, 116, 50 }, { 183, 243, 74 }, { 18, 22, 10 }, { 243, 243, 238 }, { 134, 134, 128 }),
     Emerald = preset({ 13, 20, 17 }, { 16, 24, 20 }, { 20, 29, 24 }, { 33, 47, 40 }, { 30, 44, 37 }, { 62, 96, 78 }, { 132, 226, 170 }, { 12, 26, 18 }, { 228, 240, 233 }, { 110, 136, 122 }),
     Amber = preset({ 22, 18, 13 }, { 27, 22, 16 }, { 32, 26, 19 }, { 49, 41, 31 }, { 46, 38, 28 }, { 100, 82, 58 }, { 246, 196, 120 }, { 30, 22, 10 }, { 242, 236, 226 }, { 140, 126, 106 }),
     Mono = preset({ 16, 16, 17 }, { 20, 20, 21 }, { 25, 25, 26 }, { 40, 40, 42 }, { 38, 38, 40 }, { 84, 84, 88 }, { 236, 236, 240 }, { 20, 20, 22 }, { 234, 234, 236 }, { 122, 122, 128 }),

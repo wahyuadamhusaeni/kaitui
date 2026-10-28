@@ -1,4 +1,10 @@
+-- Both run late (task.delay); once the tab or window is destroyed its frames
+-- are locked, so there is nothing to put back.
 local function settleSubOut(ui)
+    if not ui.Area.Parent then
+        ui.OutFrame = nil
+        return
+    end
     if ui.OutFrame then
         ui.OutFrame.Parent = ui.Area
         ui.OutFrame.Visible = false
@@ -8,6 +14,10 @@ local function settleSubOut(ui)
 end
 
 local function settleSubIn(ui)
+    if not ui.Area.Parent then
+        ui.InFrame = nil
+        return
+    end
     if ui.InFrame then
         ui.InFrame.Parent = ui.Area
         ui.InFrame.Position = UDim2.fromOffset(0, 0)
@@ -17,6 +27,9 @@ local function settleSubIn(ui)
 end
 
 function Tab:_setupSubTabs()
+    if #(self._items or {}) > 0 or #(self._groupboxes or {}) > 0 then
+        Library._warn(('Tab "%s" already has elements, and adding a sub tab hides them. Put everything in sub tabs, or create the sub tabs first.'):format(tostring(self.Name)))
+    end
     local top = self._headerBottom
     local page = self._page
     local strip = create("ScrollingFrame", {
@@ -214,8 +227,14 @@ function Tab:SubTab(opts, icon)
             tween(sub._label, { TextColor3 = Theme.Muted }, 0.2)
         end
     end)
+    -- A swipe that scrolls the strip on touch is not a pick (as on the main tabs).
+    local isTap = tapGuard(button, function()
+        return self._sub and self._sub.Strip
+    end)
     button.MouseButton1Click:Connect(function()
-        self:SelectSubTab(sub)
+        if isTap() then
+            self:SelectSubTab(sub)
+        end
     end)
 
     table.insert(self._subTabs, sub)

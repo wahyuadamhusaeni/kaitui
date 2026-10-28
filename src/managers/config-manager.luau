@@ -458,6 +458,11 @@ function Tab:ConfigManager(opts)
                 list:Set(nil, true)
                 manager:Refresh()
                 modeList:Set("All accounts", true)
+                -- The settings file is gone, so the switch shows the default again.
+                local startToggle = window._minimizeOnStartToggle
+                if startToggle and not startToggle._destroyed then
+                    startToggle:Set(window:GetMinimizeOnStart(), true)
+                end
                 notify(wiped, wiped and "Settings reset" or "Reset incomplete",
                     wiped and "Everything is back to its default" or "Some files in " .. window.ConfigFolder .. " could not be deleted")
             end,
