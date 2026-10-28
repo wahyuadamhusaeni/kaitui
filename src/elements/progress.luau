@@ -76,7 +76,9 @@ function Tab:Progress(opts)
         end
     end
     function self_:Set(value, silent)
-        value = math.clamp(tonumber(value) or 0, 0, 1)
+        value = tonumber(value) or 0
+        -- NaN survives math.clamp and would poison both the fill and callback.
+        value = if value ~= value then 0 else math.clamp(value, 0, 1)
         if value == self_.Value then
             return
         end

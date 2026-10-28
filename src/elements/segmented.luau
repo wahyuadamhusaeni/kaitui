@@ -319,11 +319,13 @@ function Tab:Segmented(opts)
         build()
         -- A value set before its option existed is picked now, like any other pick.
         local pending = waiting ~= nil and resolve(waiting) or nil
-        waiting = nil
         if pending then
+            waiting = nil
             pick(pending, silent)
         elseif not keep and options[1] then
             pick(1, silent)
+        elseif current ~= nil and not keep and not silent then
+            safeCall(opts.Callback, nil)
         end
     end
     handle.Refresh = handle.SetOptions

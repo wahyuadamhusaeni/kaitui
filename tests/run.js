@@ -5,7 +5,7 @@
 // Fails on any error, and on any warning except in the misuse test, where
 // warnings explaining the script's mistakes are the point (they are listed).
 //
-//   node tests/run.js            examples/demo.luau, tests/quickstart.luau and tests/misuse.luau, mouse and touch
+//   node tests/run.js            demo, quickstart, regressions and misuse, mouse and touch
 //   node tests/run.js --verbose  also print the scripts' own output
 //   node tests/run.js --script=path/to/script.luau [--scenario=path/to/scenario.luau] [--touch]
 //                                run one script (and optionally another scenario) instead
@@ -92,6 +92,7 @@ const scripts = scriptArg
     : {
         demo: { file: path.join(root, "examples", "demo.luau") },
         quickstart: { file: path.join(__dirname, "quickstart.luau") },
+        regressions: { file: path.join(__dirname, "regressions.luau") },
         misuse: { file: path.join(__dirname, "misuse.luau"), allowWarnings: true },
     };
 const modes = scriptArg ? [process.argv.includes("--touch")] : [false, true];

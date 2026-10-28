@@ -13,7 +13,10 @@ function Library._parseAmount(text)
     local scale = suffix and Library._amountSuffixes[suffix]
     number = digits and tonumber(digits)
     if number and scale then
-        return number * scale
+        number *= scale
+        if number == number and math.abs(number) ~= math.huge then
+            return number
+        end
     end
     return nil
 end
@@ -142,7 +145,7 @@ function Tab:Input(opts)
             flashStroke(frameStroke)
             -- Configs load through here, so the script hears the loaded text.
             if not silent and box.Text ~= before then
-                safeCall(opts.Callback, opts.Numeric and value or box.Text, false)
+                safeCall(opts.Callback, if opts.Numeric then value else box.Text, false)
             end
         end,
         Get = function()
